@@ -68,7 +68,7 @@ On first boot the backend runs `prisma migrate deploy` and auto-seeds if the eve
 4. **Environment variables:**
    - `DATABASE_URL` — your Neon URL (secret).
    - `NODE_ENV` — `production`
-   - `FRONTEND_URL` — your Vercel site URL, e.g. `https://your-app.vercel.app` (comma-separate multiple origins if needed).
+   - `FRONTEND_URL` — your Vercel origin(s), e.g. `https://your-app.vercel.app` (no trailing slash). Include **both** the production domain and the `*.vercel.app` preview URL if you test on preview deploys, comma-separated.
 5. After deploy, note the service URL, e.g. `https://factory-dashboard-api.onrender.com`.
 
 Optional: connect the repo and use `backend/render.yaml` as a [Blueprint](https://render.com/docs/blueprint-spec); still set `DATABASE_URL` and `FRONTEND_URL` in the dashboard.
@@ -77,7 +77,7 @@ Optional: connect the repo and use `backend/render.yaml` as a [Blueprint](https:
 
 1. New Project → import repo, **Root Directory**: `frontend`, Framework Preset: **Vite**.
 2. **Environment variable (required for production API calls):**
-   - `VITE_API_URL` = `https://YOUR-RENDER-SERVICE.onrender.com/api` (use your real Render URL).
+   - `VITE_API_URL` = `https://YOUR-RENDER-SERVICE.onrender.com` **or** the same URL with `/api` on the end. The frontend normalizes to `…/api` automatically.
 3. Deploy. The dashboard will call the Render API; CORS is allowed only for `FRONTEND_URL` on the backend, so keep those two in sync.
 
 ### 4. First-time database

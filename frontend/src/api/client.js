@@ -1,7 +1,19 @@
 import axios from "axios";
 
+/**
+ * VITE_API_URL should be the Render root, e.g. https://biztech-6tge.onrender.com
+ * OR already include /api. Routes in this client use paths like /metrics → full URL must be .../api/metrics.
+ */
+function resolveApiBase() {
+  const raw = import.meta.env.VITE_API_URL?.trim();
+  if (!raw) return "/api";
+  const noTrail = raw.replace(/\/+$/, "");
+  if (noTrail.endsWith("/api")) return noTrail;
+  return `${noTrail}/api`;
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "/api",
+  baseURL: resolveApiBase(),
   headers: { "Content-Type": "application/json" },
 });
 

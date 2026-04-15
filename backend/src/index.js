@@ -17,12 +17,22 @@ const logger = pino({ name: "server" });
 const PORT = process.env.PORT || 3001;
 
 const corsOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean)
+  ? process.env.FRONTEND_URL.split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean)
   : null;
 
 app.use(
   cors({
-    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    origin:
+      corsOrigins && corsOrigins.length > 0
+        ? (origin, cb) => {
+            if (!origin) return cb(null, true);
+            const normalized = origin.replace(/\/+$/, "");
+            if (corsOrigins.includes(normalized)) return cb(null, true);
+            return cb(null, false);
+          }
+        : true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 app.use(express.json({ limit: "5mb" }));
