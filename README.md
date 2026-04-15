@@ -9,29 +9,34 @@ An AI-powered CCTV worker monitoring dashboard that ingests machine-vision event
 ### Local Development (without Docker)
 
 ```bash
-# 1. Install backend dependencies
+# 1. Copy env template and set DATABASE_URL to your Neon connection string
 cd backend
+cp .env.example .env
+# Edit .env — use Neon "Pooled" connection string, sslmode=require
+
+# 2. Install dependencies
 npm install
 
-# 2. Generate Prisma client & run initial migration
+# 3. Generate Prisma client & apply migrations to Neon
 npx prisma generate
-npx prisma db push
+npx prisma migrate deploy
 
-# 3. Seed the database
+# 4. Seed the database (optional if you will rely on API auto-seed on empty DB)
 node prisma/seed.js
 
-# 4. Start the API server (port 3001)
+# 5. Start the API server (port 3001)
 node src/index.js
 
-# 5. In a new terminal — install frontend dependencies
+# 6. In a new terminal — frontend
 cd frontend
 npm install
-
-# 6. Start the dev server (port 3000, proxies /api → 3001)
+# For local UI talking to local API, default Vite proxy is fine (no .env needed).
 npm run dev
 ```
 
 ### Docker Compose
+
+Create `backend/.env` with `DATABASE_URL` pointing at Neon (same as local). Then:
 
 ```bash
 docker-compose up --build
@@ -41,7 +46,43 @@ docker-compose up --build
 - Backend: http://localhost:3001
 - Health check: http://localhost:3001/health
 
-On first boot the backend auto-runs Prisma migrations and seeds the database if the events table is empty.
+On first boot the backend runs `prisma migrate deploy` and auto-seeds if the events table is empty.
+
+---
+
+## Deploy (Neon + Render + Vercel)
+
+**Secrets:** Never commit `DATABASE_URL` or database passwords. Store them in the Render / Vercel dashboards only. If a connection string was shared in chat, email, or a ticket, **rotate the Neon password** in the Neon project settings.
+
+### 1. Neon (PostgreSQL)
+
+1. Create a project at [neon.tech](https://neon.tech).
+2. Copy the **pooled** `postgresql://…` connection string (SSL on).
+3. If Node/Prisma fails to connect, try the same URL with **`channel_binding=require` removed** (some drivers disagree with the pooler).
+
+### 2. Render (backend API)
+
+1. New **Web Service** → connect this repo, **Root Directory**: `backend`.
+2. **Build Command:** `npm install && npx prisma generate && npx prisma migrate deploy`
+3. **Start Command:** `node src/index.js`
+4. **Environment variables:**
+   - `DATABASE_URL` — your Neon URL (secret).
+   - `NODE_ENV` — `production`
+   - `FRONTEND_URL` — your Vercel site URL, e.g. `https://your-app.vercel.app` (comma-separate multiple origins if needed).
+5. After deploy, note the service URL, e.g. `https://factory-dashboard-api.onrender.com`.
+
+Optional: connect the repo and use `backend/render.yaml` as a [Blueprint](https://render.com/docs/blueprint-spec); still set `DATABASE_URL` and `FRONTEND_URL` in the dashboard.
+
+### 3. Vercel (frontend)
+
+1. New Project → import repo, **Root Directory**: `frontend`, Framework Preset: **Vite**.
+2. **Environment variable (required for production API calls):**
+   - `VITE_API_URL` = `https://YOUR-RENDER-SERVICE.onrender.com/api` (use your real Render URL).
+3. Deploy. The dashboard will call the Render API; CORS is allowed only for `FRONTEND_URL` on the backend, so keep those two in sync.
+
+### 4. First-time database
+
+After the first successful Render deploy with `DATABASE_URL`, migrations create tables. On first request, if there are no events, the server auto-seeds. You can also run `POST /api/seed` from the UI or curl.
 
 ---
 
@@ -54,7 +95,7 @@ Edge (CCTV cameras)
 POST /api/events/ingest   ←── JSON event payloads
        │
        ▼
-   SQLite DB (Prisma ORM)
+   PostgreSQL (Prisma ORM, e.g. Neon)
        │
        ▼
 GET /api/metrics           ←── computed on the fly
@@ -221,7 +262,7 @@ To support evolving computer-vision models:
 
 | Scale          | Approach                                                                 |
 |----------------|--------------------------------------------------------------------------|
-| **5 cameras**  | Current architecture (SQLite + single Express instance) handles this easily. |
+| **5 cameras**  | Current architecture (PostgreSQL + single Express instance) handles this easily. |
 | **100+ cameras** | Replace direct DB writes with a message queue (Kafka / SQS). Async consumers batch-insert events. Switch to PostgreSQL for concurrent writes. |
 | **Multi-site** | Add `site_id` to all entities. Run PostgreSQL per site. Use ClickHouse or TimescaleDB for cross-site analytics. Add an aggregation API layer. |
 
@@ -233,6 +274,6 @@ To support evolving computer-vision models:
 2. **Utilization excludes absent time** — A worker marked absent is neither productive nor idle; they are simply not on the floor.
 3. **product_count is additive** — Each product_count event's `count` is summed directly. There is no deduplication beyond the idempotency key.
 4. **Single shift** — Metric computation assumes a single 8-hour shift (28 800 seconds). Multi-shift support would require shift-boundary configuration.
-5. **SQLite for development** — Chosen for zero-config local development. PostgreSQL is recommended for production (concurrent writes, better indexing).
+5. **PostgreSQL (Neon)** — Local and production use the same Prisma schema; use a pooled Neon URL in `DATABASE_URL` for serverless-friendly connections.
 6. **No authentication** — The seed and ingest endpoints are open. In production, add JWT or API-key middleware.
 7. **Confidence threshold not filtered** — All events are accepted regardless of confidence score. A production system would filter low-confidence events or flag them for review.

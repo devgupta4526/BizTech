@@ -16,7 +16,15 @@ const prisma = new PrismaClient();
 const logger = pino({ name: "server" });
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+const corsOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean)
+  : null;
+
+app.use(
+  cors({
+    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+  })
+);
 app.use(express.json({ limit: "5mb" }));
 
 app.get("/health", (_req, res) => {
@@ -29,15 +37,18 @@ app.use("/api/seed", seedRouter);
 
 async function bootstrap() {
   try {
-    // Run migrations
     logger.info("Running Prisma migrations …");
     execSync("npx prisma migrate deploy", {
       cwd: path.resolve(__dirname, ".."),
       stdio: "inherit",
     });
-  } catch {
-    logger.warn("Prisma migrate deploy failed — attempting db push …");
-    execSync("npx prisma db push --accept-data-loss", {
+  } catch (err) {
+    if (process.env.NODE_ENV === "production") {
+      logger.error(err, "Prisma migrate deploy failed in production");
+      throw err;
+    }
+    logger.warn("migrate deploy failed — attempting prisma db push (dev only) …");
+    execSync("npx prisma db push", {
       cwd: path.resolve(__dirname, ".."),
       stdio: "inherit",
     });
