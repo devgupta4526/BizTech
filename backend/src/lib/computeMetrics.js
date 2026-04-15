@@ -20,6 +20,8 @@ const DEFAULT_LAST_EVENT_DURATION_SEC = 900; // 15 minutes
  *   Absent time is excluded from utilization.
  */
 async function computeMetrics(filters = {}) {
+  logger.info({ filters }, "Computing metrics (durations: per-worker sort, gap to next event, last event = 15m)");
+
   const where = {};
   if (filters.worker_id) where.workerId = filters.worker_id;
   if (filters.station_id) where.stationId = filters.station_id;
@@ -43,6 +45,11 @@ async function computeMetrics(filters = {}) {
   for (const w of workers) byWorker[w.id] = { ...w, events: [] };
   for (const e of events) {
     if (byWorker[e.workerId]) byWorker[e.workerId].events.push(e);
+  }
+  for (const w of workers) {
+    byWorker[w.id].events.sort(
+      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+    );
   }
 
   // ── Group events by station ──
@@ -121,7 +128,9 @@ async function computeMetrics(filters = {}) {
     }
 
     for (const wId of Object.keys(workerEventsHere)) {
-      const wEvts = workerEventsHere[wId];
+      const wEvts = workerEventsHere[wId].sort(
+        (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+      );
       for (let i = 0; i < wEvts.length; i++) {
         const evt = wEvts[i];
         const durationSec =

@@ -52,8 +52,10 @@ function pickEventType() {
   return "product_count";
 }
 
+/** Random gap between events: 5–15 minutes (inclusive), per spec. */
 function randomInterval() {
-  return (5 + Math.floor(Math.random() * 8)) * 60 * 1000;
+  const minutes = 5 + Math.floor(Math.random() * 11);
+  return minutes * 60 * 1000;
 }
 
 function generateEvents() {
